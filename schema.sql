@@ -28,7 +28,6 @@ CREATE TABLE group_memberships (
     group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    reason TEXT NOT NULL,
     CONSTRAINT uq_group_membership_user UNIQUE (user_id)
 );
 
