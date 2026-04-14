@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.db.session import get_db
-from app.models import User
-from app.schemas import (
+from app.backend.core.config import settings
+from app.backend.db.session import get_db
+from app.backend.models import User
+from app.backend.schemas import (
     GroupMemberRead,
     GroupRead,
     GroupingRunResponse,
@@ -17,7 +17,7 @@ from app.schemas import (
     UserGroupRead,
     UserRead,
 )
-from app.services.grouping import (
+from app.backend.services.grouping import (
     get_group_members,
     get_user_attributes,
     get_user_group,
@@ -113,5 +113,5 @@ def run_grouping(
     db: Session = Depends(get_db),
 ) -> GroupingRunResponse:
     threshold = settings.min_match if min_match is None else min_match
-    assigned = run_grouping_cycle(db, min_match=threshold)
+    assigned = run_grouping_cycle(db, min_match=threshold, regroup_all=min_match is not None)
     return GroupingRunResponse(assigned_users=assigned, min_match=threshold)

@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
-from app.models import Attribute, Group, GroupMembership, User, UserAttribute
-from app.services.grouping import (
+from app.backend.models import Attribute, Group, GroupMembership, User, UserAttribute
+from app.backend.services.grouping import (
     get_group_members,
     get_user_attributes,
     get_user_group,
@@ -125,6 +125,31 @@ def test_run_grouping_cycle_respects_min_match(db):
     g2 = get_user_group(db, u2.id)
     assert g1 is not None and g2 is not None
     assert g1.id != g2.id
+
+
+def test_run_grouping_cycle_regroup_all_rebuilds_existing_groups(db):
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    u1 = _create_user(db, "ra", "ra@example.com", base)
+    u2 = _create_user(db, "rb", "rb@example.com", base + timedelta(seconds=1))
+    db.commit()
+
+    set_user_attributes(db, u1, ["software", "engineer", "senior"])
+    set_user_attributes(db, u2, ["software", "engineer", "gamer"])
+    db.commit()
+
+    initial_assigned = run_grouping_cycle(db, min_match=2)
+    assert initial_assigned == 2
+    initial_g1 = get_user_group(db, u1.id)
+    initial_g2 = get_user_group(db, u2.id)
+    assert initial_g1 is not None and initial_g2 is not None
+    assert initial_g1.id == initial_g2.id
+
+    reassigned = run_grouping_cycle(db, min_match=4, regroup_all=True)
+    assert reassigned == 2
+    updated_g1 = get_user_group(db, u1.id)
+    updated_g2 = get_user_group(db, u2.id)
+    assert updated_g1 is not None and updated_g2 is not None
+    assert updated_g1.id != updated_g2.id
 
 
 def test_get_group_members_and_user_attributes(db):

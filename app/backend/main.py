@@ -4,15 +4,16 @@ from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from app import models  # noqa: F401
-from app.api.routes import router
-from app.core.config import settings
-from app.db.base import Base
-from app.db.session import SessionLocal, engine
-from app.services.grouping import run_grouping_cycle
+from app.backend import models  # noqa: F401
+from app.backend.api.routes import router
+from app.backend.core.config import settings
+from app.backend.db.base import Base
+from app.backend.db.session import SessionLocal, engine
+from app.backend.services.grouping import run_grouping_cycle
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,13 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(router, prefix="/api")
 
 

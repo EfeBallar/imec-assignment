@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 
-from app.models import Attribute, Group, GroupMembership, User, UserAttribute
+from app.backend.models import Attribute, Group, GroupMembership, User, UserAttribute
 
 
 def _create_user(username: str, email: str) -> User:

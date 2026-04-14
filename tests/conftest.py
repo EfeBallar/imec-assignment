@@ -12,10 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import app.models  # noqa: F401
-from app.api.routes import router
-from app.db.base import Base
-from app.db.session import get_db
+import app.backend.models  # noqa: F401
+from app.backend.api.routes import router
+from app.backend.db.base import Base
+from app.backend.db.session import get_db
 
 
 @pytest.fixture()

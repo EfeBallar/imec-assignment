@@ -3,11 +3,11 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.config import settings
-from app.models import Attribute, Group, GroupMembership, User, UserAttribute
+from app.backend.core.config import settings
+from app.backend.models import Attribute, Group, GroupMembership, User, UserAttribute
 
 logger = logging.getLogger(__name__)
 
@@ -84,19 +84,33 @@ def _shared_count(left: set[str], right: set[str]) -> int:
     return len(left.intersection(right))
 
 
-def run_grouping_cycle(db: Session, min_match: int | None = None) -> int:
+def run_grouping_cycle(
+    db: Session,
+    min_match: int | None = None,
+    regroup_all: bool = False,
+) -> int:
     threshold = settings.min_match if min_match is None else max(min_match, 0)
 
     users = db.scalars(select(User).order_by(User.created_at.asc())).all()
 
-    membership_rows = db.execute(
-        select(GroupMembership.group_id, GroupMembership.user_id)
-    ).all()
-    grouped_user_ids = {row[1] for row in membership_rows}
-
     group_member_map: dict[UUID, list[UUID]] = {}
-    for group_id, user_id in membership_rows:
-        group_member_map.setdefault(group_id, []).append(user_id)
+    if regroup_all:
+        # Manual regroup mode:
+        # - remove all existing memberships and groups
+        # - reassign every user using the provided threshold
+        # This is used when an operator overrides MIN_MATCH and expects
+        # existing group structure to be recomputed from scratch.
+        db.execute(delete(GroupMembership))
+        db.execute(delete(Group))
+        db.flush()
+        grouped_user_ids: set[UUID] = set()
+    else:
+        membership_rows = db.execute(
+            select(GroupMembership.group_id, GroupMembership.user_id)
+        ).all()
+        grouped_user_ids = {row[1] for row in membership_rows}
+        for group_id, user_id in membership_rows:
+            group_member_map.setdefault(group_id, []).append(user_id)
 
     attr_rows = db.execute(
         select(UserAttribute.user_id, Attribute.value)

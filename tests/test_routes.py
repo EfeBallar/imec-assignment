@@ -157,3 +157,29 @@ def test_updating_attributes_removes_old_membership_until_next_batch(client):
     final_group = client.get(f"/api/users/{user_1}/group").json()["group"]
     assert final_group is not None
     assert final_group["id"] != initial_group["id"]
+
+
+def test_grouping_override_rebuilds_existing_groups(client):
+    user_1 = client.post("/api/users", json={"username": "ovr1", "email": "ovr1@example.com"}).json()["id"]
+    user_2 = client.post("/api/users", json={"username": "ovr2", "email": "ovr2@example.com"}).json()["id"]
+
+    client.put(f"/api/users/{user_1}/attributes", json={"attributes": ["software", "engineer", "senior"]})
+    client.put(f"/api/users/{user_2}/attributes", json={"attributes": ["software", "engineer", "gamer"]})
+
+    baseline = client.post("/api/grouping/run?min_match=2")
+    assert baseline.status_code == 200
+    assert baseline.json()["assigned_users"] == 2
+
+    before_group_1 = client.get(f"/api/users/{user_1}/group").json()["group"]
+    before_group_2 = client.get(f"/api/users/{user_2}/group").json()["group"]
+    assert before_group_1 is not None and before_group_2 is not None
+    assert before_group_1["id"] == before_group_2["id"]
+
+    override = client.post("/api/grouping/run?min_match=4")
+    assert override.status_code == 200
+    assert override.json()["assigned_users"] == 2
+
+    after_group_1 = client.get(f"/api/users/{user_1}/group").json()["group"]
+    after_group_2 = client.get(f"/api/users/{user_2}/group").json()["group"]
+    assert after_group_1 is not None and after_group_2 is not None
+    assert after_group_1["id"] != after_group_2["id"]
