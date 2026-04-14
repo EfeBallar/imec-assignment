@@ -129,6 +129,7 @@ def test_grouping_workflow_via_routes(client):
     assert group_3 is not None
     assert group_1["id"] == group_2["id"]
     assert group_3["id"] != group_1["id"]
+    assert group_1["name"] == "engineer-software"
 
     member_ids = {member["id"] for member in group_1["members"]}
     assert member_ids == {user_1, user_2}
@@ -183,3 +184,31 @@ def test_grouping_override_rebuilds_existing_groups(client):
     after_group_2 = client.get(f"/api/users/{user_2}/group").json()["group"]
     assert after_group_1 is not None and after_group_2 is not None
     assert after_group_1["id"] != after_group_2["id"]
+
+
+def test_group_name_uses_matched_attributes_and_respects_override(client):
+    user_1 = client.post("/api/users", json={"username": "n1user", "email": "n1@example.com"}).json()["id"]
+    user_2 = client.post("/api/users", json={"username": "n2user", "email": "n2@example.com"}).json()["id"]
+
+    client.put(
+        f"/api/users/{user_1}/attributes",
+        json={"attributes": ["belgium", "intern", "software", "engineer", "brussels"]},
+    )
+    client.put(
+        f"/api/users/{user_2}/attributes",
+        json={"attributes": ["intern", "belgium", "engineer", "software", "gamer", "brussels"]},
+    )
+
+    baseline = client.post("/api/grouping/run?min_match=2")
+    assert baseline.status_code == 200
+
+    group_before = client.get(f"/api/users/{user_1}/group").json()["group"]
+    assert group_before is not None
+    assert group_before["name"] == "belgium-brussels"
+
+    override = client.post("/api/grouping/run?min_match=4")
+    assert override.status_code == 200
+
+    group_after = client.get(f"/api/users/{user_1}/group").json()["group"]
+    assert group_after is not None
+    assert group_after["name"] == "belgium-brussels-engineer-intern"

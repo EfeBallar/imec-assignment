@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -89,7 +89,6 @@ class GroupMembership(Base):
         index=True,
     )
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    reason: Mapped[str] = mapped_column(Text, nullable=False, default="Assigned by grouping worker")
 
     group: Mapped["Group"] = relationship(back_populates="memberships")
     user: Mapped["User"] = relationship(back_populates="memberships")

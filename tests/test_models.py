@@ -61,10 +61,10 @@ def test_group_membership_unique_user_constraint(db):
     db.add_all([user, group1, group2])
     db.commit()
 
-    db.add(GroupMembership(group_id=group1.id, user_id=user.id, reason="first"))
+    db.add(GroupMembership(group_id=group1.id, user_id=user.id))
     db.commit()
 
-    db.add(GroupMembership(group_id=group2.id, user_id=user.id, reason="second"))
+    db.add(GroupMembership(group_id=group2.id, user_id=user.id))
     with pytest.raises(IntegrityError):
         db.commit()
 
@@ -77,7 +77,7 @@ def test_deleting_user_removes_related_links(db):
     db.commit()
 
     db.add(UserAttribute(user_id=user.id, attribute_id=attribute.id))
-    db.add(GroupMembership(group_id=group.id, user_id=user.id, reason="assigned"))
+    db.add(GroupMembership(group_id=group.id, user_id=user.id))
     db.commit()
 
     db.delete(user)

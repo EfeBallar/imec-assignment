@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -84,6 +85,31 @@ def _shared_count(left: set[str], right: set[str]) -> int:
     return len(left.intersection(right))
 
 
+def _slugify_attribute(value: str) -> str:
+    token = value.strip().lower().replace(" ", "-")
+    token = re.sub(r"[^a-z0-9-]", "", token)
+    token = re.sub(r"-+", "-", token).strip("-")
+    return token
+
+
+def _build_group_name(attribute_values: set[str], threshold: int, fallback_user_id: UUID) -> str:
+    target_count = max(1, threshold)
+    tokens: list[str] = []
+    for value in sorted(attribute_values):
+        token = _slugify_attribute(value)
+        if not token:
+            continue
+        if token in tokens:
+            continue
+        tokens.append(token)
+        if len(tokens) >= target_count:
+            break
+
+    if tokens:
+        return "-".join(tokens)
+    return f"user-{str(fallback_user_id)[:8]}"
+
+
 def run_grouping_cycle(
     db: Session,
     min_match: int | None = None,
@@ -94,6 +120,7 @@ def run_grouping_cycle(
     users = db.scalars(select(User).order_by(User.created_at.asc())).all()
 
     group_member_map: dict[UUID, list[UUID]] = {}
+    group_by_id: dict[UUID, Group] = {}
     if regroup_all:
         # Manual regroup mode:
         # - remove all existing memberships and groups
@@ -105,6 +132,9 @@ def run_grouping_cycle(
         db.flush()
         grouped_user_ids: set[UUID] = set()
     else:
+        groups = db.scalars(select(Group)).all()
+        group_by_id = {group.id: group for group in groups}
+
         membership_rows = db.execute(
             select(GroupMembership.group_id, GroupMembership.user_id)
         ).all()
@@ -129,6 +159,7 @@ def run_grouping_cycle(
 
         best_group_id: UUID | None = None
         best_score = -1
+        best_match_attrs: set[str] = set()
 
         for group_id, member_ids in group_member_map.items():
             if not member_ids:
@@ -143,28 +174,37 @@ def run_grouping_cycle(
             # This keeps the process non-real-time and batch-friendly, while enforcing the
             # configurable threshold for similarity.
             group_score = 0
+            group_match_attrs: set[str] = set()
             for member_id in member_ids:
                 member_attrs = user_attr_map.get(member_id, set())
-                score = _shared_count(user_attrs, member_attrs)
+                shared_attrs = user_attrs.intersection(member_attrs)
+                score = len(shared_attrs)
                 if score > group_score:
                     group_score = score
+                    group_match_attrs = shared_attrs
 
             if group_score >= threshold and group_score > best_score:
                 best_score = group_score
                 best_group_id = group_id
+                best_match_attrs = group_match_attrs
 
         if best_group_id is None:
-            group = Group(name=f"Group-{str(user.id)[:8]}")
+            group = Group(name=_build_group_name(user_attrs, threshold, user.id))
             db.add(group)
             db.flush()
             best_group_id = group.id
+            group_by_id[best_group_id] = group
             group_member_map[best_group_id] = []
+        else:
+            group = group_by_id.get(best_group_id)
+            if group is not None and len(group_member_map.get(best_group_id, [])) == 1 and best_match_attrs:
+                group.name = _build_group_name(best_match_attrs, threshold, user.id)
+                db.flush()
 
         db.add(
             GroupMembership(
                 group_id=best_group_id,
                 user_id=user.id,
-                reason=f"Assigned by batch grouping process (min_match={threshold})",
             )
         )
         db.flush()

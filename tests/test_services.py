@@ -51,7 +51,7 @@ def test_remove_user_membership_deletes_empty_group(db):
     db.add_all([user, group])
     db.commit()
 
-    db.add(GroupMembership(group_id=group.id, user_id=user.id, reason="assigned"))
+    db.add(GroupMembership(group_id=group.id, user_id=user.id))
     db.commit()
 
     remove_user_membership(db, user.id)
@@ -69,8 +69,8 @@ def test_remove_user_membership_keeps_group_with_other_members(db):
     db.add_all([group, user_1, user_2])
     db.commit()
 
-    db.add(GroupMembership(group_id=group.id, user_id=user_1.id, reason="assigned"))
-    db.add(GroupMembership(group_id=group.id, user_id=user_2.id, reason="assigned"))
+    db.add(GroupMembership(group_id=group.id, user_id=user_1.id))
+    db.add(GroupMembership(group_id=group.id, user_id=user_2.id))
     db.commit()
 
     remove_user_membership(db, user_1.id)
@@ -150,6 +150,41 @@ def test_run_grouping_cycle_regroup_all_rebuilds_existing_groups(db):
     updated_g2 = get_user_group(db, u2.id)
     assert updated_g1 is not None and updated_g2 is not None
     assert updated_g1.id != updated_g2.id
+
+
+def test_group_name_uses_first_min_match_shared_attributes(db):
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    u1 = _create_user(db, "namea", "namea@example.com", base)
+    u2 = _create_user(db, "nameb", "nameb@example.com", base + timedelta(seconds=1))
+    db.commit()
+
+    set_user_attributes(db, u1, ["belgium", "intern", "software", "engineer"])
+    set_user_attributes(db, u2, ["intern", "belgium", "gamer", "software"])
+    db.commit()
+
+    run_grouping_cycle(db, min_match=2)
+    group = get_user_group(db, u1.id)
+    assert group is not None
+    assert group.name == "belgium-intern"
+
+
+def test_group_name_reflects_override_min_match(db):
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    u1 = _create_user(db, "namec", "namec@example.com", base)
+    u2 = _create_user(db, "named", "named@example.com", base + timedelta(seconds=1))
+    db.commit()
+
+    shared = ["belgium", "intern", "software", "engineer", "brussels"]
+    set_user_attributes(db, u1, shared + ["senior"])
+    set_user_attributes(db, u2, shared + ["gamer"])
+    db.commit()
+
+    run_grouping_cycle(db, min_match=2)
+    run_grouping_cycle(db, min_match=4, regroup_all=True)
+
+    group = get_user_group(db, u1.id)
+    assert group is not None
+    assert group.name == "belgium-brussels-engineer-intern"
 
 
 def test_get_group_members_and_user_attributes(db):
