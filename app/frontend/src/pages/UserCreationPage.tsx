@@ -39,7 +39,6 @@ export function UserCreationPage() {
     <section className="panel panel-elevated page-enter">
       <div className="section-head">
         <h2>Create User</h2>
-        <p className="muted">Add a new account and generate a unique identity for grouping.</p>
       </div>
 
       <form className="stack" onSubmit={onSubmit}>
